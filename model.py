@@ -1,14 +1,20 @@
+import sys, inspect
 from Nebula import Vertex
-from Nebula import session
+from Nebula import Edge
+from Nebula import configure
 
 
 class Player(Vertex):
+    name = "string"
+    age = "int"
 
-    name = str
-    age = int
+
+class Follow(Edge):
+    degree = "string"
 
 
-from pprint import pprint
+clsmembers = inspect.getmembers(sys.modules[__name__], inspect.isclass)
+configure(clsmembers)
 
-pprint(Player("player122").get().to_json())
-session.release()
+# a = Follow(start="A", stop="B", degree="asd")
+# a.save()

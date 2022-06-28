@@ -9,8 +9,13 @@ config = Config()
 config.max_connection_pool_size = 10
 connection_pool = ConnectionPool()
 ok = connection_pool.init([("127.0.0.1", 9669)], config)
-session = connection_pool.get_session("root", "nebula")
-execute = session.execute
+
+
+def execute(command):
+    space = environ.get("SPACE") if environ.get("SPACE") else "data"
+    with connection_pool.session_context("root", "nebula") as session:
+        session.execute("USE {}".format(space))
+        return session.execute(command)
 
 
 class Nebula:
@@ -52,6 +57,8 @@ class Nebula:
         execute(insert)
         self._saved = True
 
+        return self
+
 
 class Vertex(Nebula):
     _fetch = "fetch prop on {} '{}' yield properties(vertex)"
@@ -59,11 +66,13 @@ class Vertex(Nebula):
     vid = None
 
     def get(self):
-        print(self)
         result = execute(self._fetch.format(self._name(), self.vid))
         if not result.is_empty():
             item = next(result.__iter__()).get_value(0).as_map()
-            [setattr(self, k, v) for k, v in item.items()]
+            [
+                setattr(self, k, v.as_int() if v.is_int() else v.as_string())
+                for k, v in item.items()
+            ]
             self._saved = True
 
         return self
@@ -81,20 +90,10 @@ class Edge(Nebula):
         return "'{}' -> '{}'".format(self.start, self.stop)
 
 
-class Follow(Edge):
-    degree = "string"
-
-
-class Player(Vertex):
-
-    name = "string"
-    age = "int"
-
-
-def config():
+def configure(clsmembers):
     spaces = [x for x in execute("show spaces").__iter__()]
     spaces = [x.get_value(0).as_string() for x in spaces.__iter__()]
-    space = environ.get("SPACE") if environ.get("SPACE") else "basketballplayer"
+    space = environ.get("SPACE") if environ.get("SPACE") else "data"
 
     # create space
     if space not in spaces:
@@ -105,9 +104,7 @@ def config():
         )
 
     execute("USE {}".format(space))
-
-    clsmembers = inspect.getmembers(sys.modules[__name__], inspect.isclass)
-
+    # clsmembers = inspect.getmembers(sys.modules[__name__], inspect.isclass)
     for item in clsmembers:
         name = decamelize(item[0])
 
